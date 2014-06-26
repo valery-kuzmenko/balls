@@ -199,7 +199,7 @@ var Square = defineClass(
             var points = figure.getPointsOnSquare();
             for(var key in points){
                 key = 1*key;
-                if(this.points[key] && points[key].obj){ 
+                if(this.points[key]){ 
                     this.points[key] = null;
                 }
             }
