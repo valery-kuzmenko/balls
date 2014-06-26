@@ -435,7 +435,7 @@ function App(){
     this.ball = new Ball();
     this.cart = new Cart().init();
     this.square.addDynamicFigure(this.border, this.cart);
-    this.beadCollect = new BeadCollection().init(this.border.thickness, this.border.width-this.border.thickness, this.border.thickness, this.border.height-this.border.thickness, 100, this.square);
+    this.beadCollect = new BeadCollection().init(this.border.thickness, this.border.width-this.border.thickness, this.border.thickness, this.border.height-this.border.thickness, 200, this.square);
 }
 
 var Application = new App();
