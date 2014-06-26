@@ -94,6 +94,20 @@ var BorderClashObjectSide4 = defineSubclass(
         null
 );
 
+var BeadClashObject = defineSubclass(
+        AbstractClashObject,
+        function BeadClashObject(figure){
+            this.figure = figure;
+        },
+        {
+            changeAngle: function(ball){
+                ball.angle = 360 - ball.angle;
+                Application.square.removeFigure(this.figure);
+            }                
+        },
+        null
+);
+
 var HandleCanvas = defineClass(
     function HandleCanvas(container){
         if(!HandleCanvas.prototype._instance){
@@ -134,8 +148,9 @@ var Square = defineClass(
         this.cart = null;
         this.border = null;
         this.show();
-        this._figures = [];
+        this._figures = {};
         this.points = [];
+        this._dynamic_figures = [];
     }, 
     {
         place:function(figure){
@@ -145,11 +160,18 @@ var Square = defineClass(
             var clashed_obj = null; // object wich initiates clash
             for(var i=1;i<=figure.width;i++){
                 for(var j=1;j<=figure.height;j++){
-                    for(var k=0; k < this._figures.length; k++){
-                        var res, object = this._figures[k];
-                        if((res = object.is_intersects(i+offset_x, j+offset_y)) && (!figure.last_clashed_obj || figure.last_clashed_obj != res)){
-                            if(!is_clash) clashed_obj = res;
+                    if(this.points[i+offset_x] && this.points[i+offset_x][j+offset_y] && this.points[i+offset_x][j+offset_y].clash!=figure.last_clashed_obj){
+                        clashed_obj = this.points[i+offset_x][j+offset_y].clash;
+                        is_clash = true;
+                        break;
+                    }
+                    
+                    for(var k in this._dynamic_figures){
+                        var res, object = this._dynamic_figures[k];
+                        if((res = object.isIntersects(i+offset_x, j+offset_y)) && (!figure.last_clashed_obj || figure.last_clashed_obj != res)){
+                            clashed_obj = res;
                             is_clash = true;
+                            break;
                         };
                     }
                 }            
@@ -167,14 +189,49 @@ var Square = defineClass(
         },
         addFigure: function(){
             for(var i=0; i< arguments.length;i++){
-                this._figures[this._figures.length] = arguments[i];
+                var figure = arguments[i];
+                var hash = Square._hash();
+                figure._square_hash = hash;
+                this._figures[hash] = figure;
+            }
+        },
+        removeFigure: function(figure){
+            var points = figure.getPointsOnSquare();
+            for(var key in points){
+                key = 1*key;
+                if(this.points[key] && points[key].obj){ 
+                    this.points[key] = null;
+                }
+            }
+            delete this._figures[figure._square_hash];
+        },
+        addDynamicFigure: function(){
+            for(var i=0; i< arguments.length;i++){
+                var figure = arguments[i];
+                var hash = Square._hash();
+                figure._square_hash = hash;
+                this._dynamic_figures[hash] = figure;
             }            
         },
-        getFigures: function(){
-            return this._figures;       
+        showAllFigures: function(){
+            for(hash in this._dynamic_figures){
+                this._dynamic_figures[hash].show();
+            }; 
+            for(hash in this._figures){
+                this._figures[hash].show();
+            };             
         },
     },
-    null
+    {
+        _hash: (function(){
+            var start = 0;
+            
+            return function(){
+                start++;
+                return 'Object#' + start;
+            };
+        })()          
+    }
 );
 
 var Border = defineSubclass(
@@ -183,7 +240,7 @@ var Border = defineSubclass(
         this.thickness = 25;
         this.width = (new HandleCanvas()).width;
         this.height = (new HandleCanvas()).height;
-        
+
     },
     {
         show: function(){
@@ -193,7 +250,7 @@ var Border = defineSubclass(
             context.strokeRect( this.thickness, this.thickness, (new HandleCanvas()).width - this.thickness*2, (new HandleCanvas()).height - this.thickness*2);
             context.fillRect( this.thickness, this.thickness, (new HandleCanvas()).width - this.thickness*2, (new HandleCanvas()).height - this.thickness*2);
         },
-        is_intersects: function(i, j){
+        isIntersects: function(i, j){
             if(i<=this.thickness){
                 return (new BorderClashObjectSide1());
             }else if(i >= this.width - this.thickness){
@@ -244,7 +301,6 @@ var Ball = defineClass(
            this.start_y = this.start_y + y;
        },
        clash: function(object){
-           if(object == null) debugger;
            object.changeAngle(this);
 
            if(this.angle > 360){
@@ -292,7 +348,7 @@ var Cart = defineClass(
                 self.element.style.left = x + 'px';
             });
         },
-        is_intersects: function(i,j){
+        isIntersects: function(i,j){
             if((j>=this.start_y && j<=this.start_y + this.height) && i >= this.start_x && i <= (this.start_x + this.width)){
                 return (new CartClashObject());
             }
@@ -306,67 +362,67 @@ var Cart = defineClass(
 
 var Bead = defineSubclass(
     AbstractFigure, 
-    function Bead(start_x, start_y){
+    function Bead(start_x, start_y, r){
         this.start_x = start_x;
         this.start_y = start_y;
+        this.r = r;
         this.context = (new HandleCanvas()).getContext();
+        this._points_on_square = [];
     },
     {
        show: function(){
            this.context.fillStyle = 'rgb(100,100,100)';
            this.context.beginPath();
-           this.context.arc( this.start_x+Bead.r, this.start_y+Bead.r, 20, 0, Math.PI * 2, true );
+           this.context.arc( this.start_x+this.r, this.start_y+this.r, 20, 0, Math.PI * 2, true );
            this.context.closePath();
            this.context.fill();
            return this;
        },
-       is_intersects: function(i, j){
-           console.log(11);
+       isIntersects: function(i, j){
            return false;
+       },
+       putOnSquare: function(Square){
+            var size = this.r*2;;
+            for(var i = 1;i<=size;i++){
+                for(var j = 1;j<=size;j++){
+                    if(Math.sqrt(Math.pow((i-this.r),2) + Math.pow((j-this.r),2)) <= this.r){
+                        Square.points[i+this.start_x] = [];
+                        Square.points[i+this.start_x][j+this.start_y] = {obj:this, clash: (new BeadClashObject(this))};
+                        this._points_on_square[i+this.start_x] = [];
+                        this._points_on_square[i+this.start_x][j+this.start_y] = 1;                    
+                    }
+                } 
+            }
+            Square.addFigure(this);
+       },
+       getPointsOnSquare: function(){
+           return this._points_on_square;
        }
+       
     },
-    {
-        r:20,
-        is_initialized: false,
-        placedBeads:{},
-        initBeads: function(x_from, x_to, y_from, y_to, count){
-            var start_x = x_from;
-            for(var k=1; k<=count; k++){
-                var hash = Bead._stored_hash();
-                if(x_from+Bead.r*2 + 1 < x_to){
-                     var obj = new Bead(x_from + 1, y_from + 1);
-                     obj._bead_hash = hash;
-                     Bead.placedBeads[hash] = obj;
-                     x_from = x_from + Bead.r*2 + 1;
-                }else{
-                     y_from = y_from + Bead.r*2 + 1;
-                     x_from = start_x;
-                     var obj = new Bead(x_from+ 1, y_from + 1);
-                     obj._bead_hash = hash;
-                     Bead.placedBeads[hash] = obj;
-                }                   
-            }
-        },
-        showBeads: function(){
-            for(hash in Bead.placedBeads){
-                Bead.placedBeads[hash].show();
-            }
-        },
-        _stored_hash: function(){
-            Bead._stored_hash.start++;
-            return  'BeadObject#' + Bead._stored_hash.start;
-        }        
-    }
+    null
 ); 
-Bead._stored_hash.start = 0;
 
-var BeadCollection = defineSubclass(
-    AbstractFigure,
+var BeadCollection = defineClass(
     function BeadCollection(){
-        
+        this.r = 20;
+        this.arr = [];
     },
     {
-        
+        init: function(x_from, x_to, y_from, y_to, count, square){
+            var width = this.r*2; var height = this.r*2, start_x = x_from;
+            
+            for(var n = 0;n<=count;n++){
+                if((x_from + width) > x_to){
+                    x_from = start_x;
+                    y_from+=(height+1);
+                }
+
+                (new Bead(x_from, y_from, this.r)).putOnSquare(square);
+                
+                x_from+=(width+1);
+            }
+        }
     },
     null
 );
@@ -377,29 +433,25 @@ function App(){
     this.square = new Square();
     this.border = new Border();
     this.ball = new Ball();
-    this.cart = new Cart(this.square_for_cart).init();
-    Bead.initBeads(this.border.thickness, this.border.width-this.border.thickness, this.border.thickness, this.border.height-this.border.thickness, 200);
-    this.square.addFigure(this.border, this.cart);
-    for(hash in Bead.placedBeads){
-        this.square.addFigure(Bead.placedBeads[hash]);
-    }
+    this.cart = new Cart().init();
+    this.square.addDynamicFigure(this.border, this.cart);
+    this.beadCollect = new BeadCollection().init(this.border.thickness, this.border.width-this.border.thickness, this.border.thickness, this.border.height-this.border.thickness, 100, this.square);
 }
 
-var app = new App();
+var Application = new App();
 
 
 function run(){
-    app.square.show();
-    app.border.show();
-    Bead.showBeads();
-    app.square.place(app.ball);
-    app.ball.run();    
+    Application.square.show();
+    Application.square.showAllFigures();
+    Application.square.place(Application.ball);
+    Application.ball.run();    
 }
 animate();
 
 function animate(){
     
-    //window.requestAnimationFrame(animate);
+    window.requestAnimationFrame(animate);
     run();
 }
 
