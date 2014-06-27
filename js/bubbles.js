@@ -138,6 +138,19 @@ var HandleCanvas = defineClass(
         },
         get height(){
             return HandleCanvas.prototype._instance._height;
+        },
+        createBall: function(settings){
+           var peekhole = this.getContext().createRadialGradient(settings.x_small_ball, settings.y_small_ball,
+                                                            settings.r_small_ball, settings.x_big_ball, 
+                                                            settings.y_big_ball, settings.r_big_ball); 
+           peekhole.addColorStop(0, settings.color_small_ball); 
+           peekhole.addColorStop(0.9, settings.color_big_ball);
+           peekhole.addColorStop(0.95, settings.color_small_ball);
+           
+           this.getContext().fillStyle = peekhole;
+           this.getContext().beginPath();
+           this.getContext().arc( settings.start_x, settings.start_y, settings.r_big_ball, 0, Math.PI * 2, true );
+           this.getContext().fill();            
         }
     },
     null
@@ -161,6 +174,7 @@ var Square = defineClass(
             for(var i=1;i<=figure.width;i++){
                 for(var j=1;j<=figure.height;j++){
                     if(this.points[i+offset_x] && this.points[i+offset_x][j+offset_y] && this.points[i+offset_x][j+offset_y].clash!=figure.last_clashed_obj){
+                        console.log('clash');
                         clashed_obj = this.points[i+offset_x][j+offset_y].clash;
                         is_clash = true;
                         break;
@@ -184,7 +198,7 @@ var Square = defineClass(
             figure.show();
         },
         show: function(){
-            (new HandleCanvas()).getContext().fillStyle = '#C6DEE7';
+            (new HandleCanvas()).getContext().fillStyle = '#B45F04';
             (new HandleCanvas()).getContext().fillRect( 0, 0, (new HandleCanvas()).width, (new HandleCanvas()).height );
         },
         addFigure: function(){
@@ -199,8 +213,11 @@ var Square = defineClass(
             var points = figure.getPointsOnSquare();
             for(var key in points){
                 key = 1*key;
-                if(this.points[key]){ 
-                    this.points[key] = null;
+                if(this.points[key] && get_type(this.points[key]) == 'Array'){ 
+                    for(var key2 in points[key]){
+                        key2 = 1*key2;
+                        if(this.points[key][key2]) this.points[key][key2] = null;
+                    }
                 }
             }
             delete this._figures[figure._square_hash];
@@ -272,24 +289,35 @@ var Ball = defineClass(
         this.r = 20;
         this.width = this.r*2;
         this.height = this.r*2;
-        this.start_x = 200;
-        this.start_y = 200;
-        this.old_x = 200;
-        this.old_y = 200;
-        this.context = (new HandleCanvas()).getContext();
+        this.start_x = 300;
+        this.start_y = 300;
+        this.old_x = 300;
+        this.old_y = 300;
+        this.canvas = new HandleCanvas();
         this.angle = -45;
-        this.spead = 0.000000000002;
-        this.last_clashed = [];
+        this.spead = 0.000000000005;
+        this.last_clashed = null;
+        this.shift = 8;
     },
     {
        show: function(){
-           this.r = Math.floor(Math.random() * (21 - 19 + 1)) + 19;
-           var clr1 = Math.floor(Math.random() * 100), clr2 = Math.floor(Math.random() * 100);
-           this.context.fillStyle = 'rgb(200,'+clr1+','+clr2+')';
-           this.context.beginPath();
-           this.context.arc( this.old_x+this.r, this.old_y+this.r, 20, 0, Math.PI * 2, true );
-           this.context.closePath();
-           this.context.fill();
+           var x_start = this.old_x+this.r, y_start = this.old_y+this.r;
+           var direction = (((this.start_x - this.old_x) > 0) ? 1: -1)*(((this.start_y - this.old_y) > 0) ? 1: -1);
+           this.canvas.createBall({
+               x_small_ball:x_start-this.shift,
+               y_small_ball:y_start-direction*this.shift,
+               r_small_ball:7, 
+               x_big_ball:x_start,
+               y_big_ball:y_start, 
+               r_big_ball:this.r,
+               start_x:x_start,
+               start_y:y_start,
+               color_small_ball:'#8ED6FF',
+               color_big_ball:'#004CB3'
+           });
+           this.shift--;
+           if(this.shift < -8) this.shift = 8;
+           if(this.shift > 8) this.shift = -8;
        },
        run: function(){
            var time = new Date().getTime() * this.spead;
@@ -362,21 +390,29 @@ var Cart = defineClass(
 
 var Bead = defineSubclass(
     AbstractFigure, 
-    function Bead(start_x, start_y, r){
+    function Bead(start_x, start_y, r, colors){
         this.start_x = start_x;
         this.start_y = start_y;
         this.r = r;
-        this.context = (new HandleCanvas()).getContext();
+        this.canvas = (new HandleCanvas());
         this._points_on_square = [];
+        this.colors = colors;
     },
     {
        show: function(){
-           this.context.fillStyle = 'rgb(100,100,100)';
-           this.context.beginPath();
-           this.context.arc( this.start_x+this.r, this.start_y+this.r, 20, 0, Math.PI * 2, true );
-           this.context.closePath();
-           this.context.fill();
-           return this;
+           var x_start = this.start_x+this.r, y_start = this.start_y+this.r;
+           this.canvas.createBall({
+               x_small_ball:x_start-6,
+               y_small_ball:y_start-6,
+               r_small_ball:7, 
+               x_big_ball:x_start,
+               y_big_ball:y_start, 
+               r_big_ball:this.r,
+               start_x:x_start,
+               start_y:y_start,
+               color_small_ball:this.colors.small_ball,
+               color_big_ball:this.colors.big_ball
+           });
        },
        isIntersects: function(i, j){
            return false;
@@ -386,9 +422,11 @@ var Bead = defineSubclass(
             for(var i = 1;i<=size;i++){
                 for(var j = 1;j<=size;j++){
                     if(Math.sqrt(Math.pow((i-this.r),2) + Math.pow((j-this.r),2)) <= this.r){
-                        Square.points[i+this.start_x] = [];
+                        if(!Square.points[i+this.start_x])
+                            Square.points[i+this.start_x] = [];
                         Square.points[i+this.start_x][j+this.start_y] = {obj:this, clash: (new BeadClashObject(this))};
-                        this._points_on_square[i+this.start_x] = [];
+                        if(!this._points_on_square[i+this.start_x])
+                            this._points_on_square[i+this.start_x] = [];
                         this._points_on_square[i+this.start_x][j+this.start_y] = 1;                    
                     }
                 } 
@@ -410,15 +448,15 @@ var BeadCollection = defineClass(
     },
     {
         init: function(x_from, x_to, y_from, y_to, count, square){
-            var width = this.r*2; var height = this.r*2, start_x = x_from;
-            
+            var width = this.r*2; var height = this.r*2, start_x = x_from,
+                    colors = [['#FFFF00', '#FF8000'], ['#C8FE2E', '#00FF00'], ['#FA58F4', '#B40431']], c;
             for(var n = 0;n<=count;n++){
                 if((x_from + width) > x_to){
                     x_from = start_x;
                     y_from+=(height+1);
                 }
-
-                (new Bead(x_from, y_from, this.r)).putOnSquare(square);
+                c = Math.floor(Math.random() * 3);
+                new Bead(x_from, y_from, this.r, {small_ball: colors[c][0], big_ball: colors[c][1]}).putOnSquare(square);
                 
                 x_from+=(width+1);
             }
@@ -435,7 +473,7 @@ function App(){
     this.ball = new Ball();
     this.cart = new Cart().init();
     this.square.addDynamicFigure(this.border, this.cart);
-    this.beadCollect = new BeadCollection().init(this.border.thickness, this.border.width-this.border.thickness, this.border.thickness, this.border.height-this.border.thickness, 200, this.square);
+    this.beadCollect = new BeadCollection().init(this.border.thickness, this.border.width-this.border.thickness, this.border.thickness, this.border.height-this.border.thickness, 150, this.square);
 }
 
 var Application = new App();
